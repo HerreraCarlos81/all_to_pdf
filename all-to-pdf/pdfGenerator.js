@@ -3,6 +3,12 @@ const pdf = require('pdf-lib');
 const path = require('path');
 const ignore = require('ignore');
 
+const PAGE_WIDTH = 841.89;
+const PAGE_HEIGHT = 595.28;
+const MARGIN_LEFT = 50;
+const MARGIN_BOTTOM = 50;
+const MARGIN_TOP = 60;
+
 const DEFAULT_SKIP_DIRS = new Set([
     'node_modules', '.git', 'dist', 'build', '.next', '.nuxt',
     'target', 'out', '.output', '.vercel', '.cache',
@@ -64,15 +70,61 @@ async function collectFiles(folderPath, options = {}) {
     return files;
 }
 
-async function addContentPages(pdfDoc, filePathText, content, font, fontSize, lineHeight, maxWidth, maxHeight) {
-    const pageWidth = 841.89;
-    const pageHeight = 595.28;
-    const marginLeft = 50;
-    const marginBottom = 50;
-    const marginTop = 60;
+function generateProjectTree(files, rootPath) {
+    const root = {};
+    for (const file of files) {
+        const relative = path.relative(rootPath, file);
+        const parts = relative.split(path.sep);
+        let node = root;
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            if (i === parts.length - 1) {
+                node[part] = null;
+            } else {
+                if (!node[part] || node[part] === null) node[part] = {};
+                node = node[part];
+            }
+        }
+    }
+    return renderTreeLines(root, '');
+}
+
+function renderTreeLines(node, prefix) {
+    const entries = Object.entries(node).sort((a, b) => {
+        const aIsDir = a[1] !== null;
+        const bIsDir = b[1] !== null;
+        if (aIsDir && !bIsDir) return -1;
+        if (!aIsDir && bIsDir) return 1;
+        return a[0].localeCompare(b[0]);
+    });
+    let result = '';
+    for (let i = 0; i < entries.length; i++) {
+        const [key, value] = entries[i];
+        const isLast = i === entries.length - 1;
+        const connector = isLast ? '|__ ' : '|-- ';
+        const suffix = value !== null ? '/' : '';
+        result += prefix + connector + key + suffix + '\n';
+        if (value !== null) {
+            const childPrefix = prefix + (isLast ? '    ' : '|   ');
+            result += renderTreeLines(value, childPrefix);
+        }
+    }
+    return result;
+}
+
+function addLineNumbers(content, startLine) {
     const lines = content.split('\n');
-    let page = pdfDoc.addPage([pageWidth, pageHeight]);
-    let y = pageHeight - marginTop;
+    const digits = String(lines.length + startLine - 1).length;
+    return lines.map((line, i) => {
+        const num = String(startLine + i).padStart(digits, ' ');
+        return `${num} | ${line}`;
+    }).join('\n');
+}
+
+async function addContentPages(pdfDoc, filePathText, content, font, fontSize, lineHeight, maxWidth) {
+    const lines = content.split('\n');
+    let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    let y = PAGE_HEIGHT - MARGIN_TOP;
     let filePathDrawn = false;
 
     for (const line of lines) {
@@ -84,16 +136,16 @@ async function addContentPages(pdfDoc, filePathText, content, font, fontSize, li
             const testWidth = font.widthOfTextAtSize(testLine, fontSize);
 
             if (testWidth > maxWidth && lineText) {
-                if (y - lineHeight < marginBottom) {
-                    page = pdfDoc.addPage([pageWidth, pageHeight]);
-                    y = pageHeight - marginTop;
+                if (y - lineHeight < MARGIN_BOTTOM) {
+                    page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+                    y = PAGE_HEIGHT - MARGIN_TOP;
                     filePathDrawn = false;
                 }
                 if (!filePathDrawn) {
-                    page.drawText(filePathText, { x: marginLeft, y: pageHeight - 45, size: 9, font });
+                    drawFileHeader(page, filePathText, font);
                     filePathDrawn = true;
                 }
-                page.drawText(lineText, { x: marginLeft, y, size: fontSize, font, maxWidth });
+                page.drawText(lineText, { x: MARGIN_LEFT, y, size: fontSize, font, maxWidth });
                 y -= lineHeight;
                 lineText = word;
             } else {
@@ -101,29 +153,75 @@ async function addContentPages(pdfDoc, filePathText, content, font, fontSize, li
             }
         }
 
-        if (y - lineHeight < marginBottom) {
-            page = pdfDoc.addPage([pageWidth, pageHeight]);
-            y = pageHeight - marginTop;
+        if (y - lineHeight < MARGIN_BOTTOM) {
+            page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+            y = PAGE_HEIGHT - MARGIN_TOP;
             filePathDrawn = false;
         }
         if (!filePathDrawn) {
-            page.drawText(filePathText, { x: marginLeft, y: pageHeight - 45, size: 9, font });
+            drawFileHeader(page, filePathText, font);
             filePathDrawn = true;
         }
-        page.drawText(lineText, { x: marginLeft, y, size: fontSize, font, maxWidth });
+        page.drawText(lineText, { x: MARGIN_LEFT, y, size: fontSize, font, maxWidth });
         y -= lineHeight;
     }
 }
 
+function drawFileHeader(page, filePathText, font) {
+    page.drawText(filePathText, { x: MARGIN_LEFT, y: PAGE_HEIGHT - 45, size: 9, font });
+    page.drawLine({
+        start: { x: MARGIN_LEFT, y: PAGE_HEIGHT - 50 },
+        end: { x: PAGE_WIDTH - MARGIN_LEFT, y: PAGE_HEIGHT - 50 },
+        thickness: 0.5,
+        color: pdf.rgb(0.6, 0.6, 0.6),
+    });
+}
+
 function addHeaderPage(pdfDoc, folderName) {
-    const headerPage = pdfDoc.addPage([841.89, 595.28]);
-    headerPage.drawText(`Compiled PDF\n\nProject: ${folderName}`, { x: 300, y: headerPage.getHeight() - 200, size: 36 });
+    const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    page.drawText(`Compiled PDF\n\nProject: ${folderName}`, { x: 300, y: PAGE_HEIGHT - 200, size: 36 });
+}
+
+async function addTreePage(pdfDoc, treeText, folderName, fileCount) {
+    const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    const font = await pdfDoc.embedFont(pdf.StandardFonts.Courier);
+    const lines = treeText.split('\n').filter(l => l.trim());
+    let y = PAGE_HEIGHT - MARGIN_TOP + 10;
+    page.drawText(`Project Structure: ${folderName}`, { x: MARGIN_LEFT, y, size: 14, font: font });
+    y -= 30;
+    const separator = '='.repeat(50);
+    page.drawText(separator, { x: MARGIN_LEFT, y, size: 10, font: font });
+    y -= 20;
+    for (const line of lines) {
+        page.drawText(line, { x: MARGIN_LEFT, y, size: 8, font: font });
+        y -= 12;
+    }
+    y -= 10;
+    page.drawText(`(${fileCount} files total)`, { x: MARGIN_LEFT, y, size: 10, font: font });
+}
+
+async function addTOCPage(pdfDoc, tocEntries) {
+    const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    const font = await pdfDoc.embedFont(pdf.StandardFonts.Courier);
+    let y = PAGE_HEIGHT - MARGIN_TOP + 10;
+    page.drawText('Table of Contents', { x: MARGIN_LEFT, y, size: 14, font: font });
+    y -= 30;
+    const separator = '='.repeat(60);
+    page.drawText(separator, { x: MARGIN_LEFT, y, size: 10, font: font });
+    y -= 20;
+    for (const entry of tocEntries) {
+        if (y < MARGIN_BOTTOM + 20) break;
+        const pageNum = String(entry.page);
+        const dots = '.'.repeat(Math.max(1, 60 - entry.path.length - pageNum.length - 2));
+        page.drawText(`${entry.path} ${dots} ${pageNum}`, { x: MARGIN_LEFT, y, size: 8, font: font });
+        y -= 12;
+    }
 }
 
 async function addImageFilePage(pdfDoc, filePathText, file, extension) {
     const imageBytes = await fs.readFile(file);
     const image = extension === '.png' ? await pdfDoc.embedPng(imageBytes) : await pdfDoc.embedJpg(imageBytes);
-    const page = pdfDoc.addPage([841.89, 595.28]);
+    const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     const maxDimension = 500;
     let scaledWidth = image.width;
     let scaledHeight = image.height;
@@ -134,7 +232,7 @@ async function addImageFilePage(pdfDoc, filePathText, file, extension) {
     }
     const x = (page.getWidth() - scaledWidth) / 2;
     const y = ((page.getHeight() - scaledHeight) / 2) - 20;
-    page.drawText(filePathText, { x: 50, y: page.getHeight() - 50, size: 10 });
+    page.drawText(filePathText, { x: MARGIN_LEFT, y: page.getHeight() - 50, size: 10 });
     page.drawImage(image, { x, y, width: scaledWidth, height: scaledHeight });
 }
 
@@ -230,7 +328,12 @@ async function createPDF(folderPath, options = {}) {
     const pdfDoc = await pdf.PDFDocument.create();
     const folderName = path.basename(folderPath);
     addHeaderPage(pdfDoc, folderName);
+
+    const treeText = generateProjectTree(files, folderPath);
+    await addTreePage(pdfDoc, treeText, folderName, files.length);
+
     const font = await pdfDoc.embedFont(pdf.StandardFonts.Courier);
+    const tocEntries = [];
 
     for (const file of files) {
         const extension = path.extname(file).toLowerCase();
@@ -240,17 +343,19 @@ async function createPDF(folderPath, options = {}) {
         } catch {
             continue;
         }
-        const filePathText = `Content of the file: ${file}`;
+        const filePathText = `File: ${file}`;
+        const startPage = pdfDoc.getPageCount() + 1;
 
         if (['.js', '.ts', '.py', '.java', '.c', '.cpp', '.cs', '.php', '.rb', '.go'].includes(extension)) {
-            await addContentPages(pdfDoc, filePathText, content, font, 8, 10, 740, 520);
+            const numberedContent = addLineNumbers(content, 1);
+            await addContentPages(pdfDoc, filePathText, numberedContent, font, 8, 10, 740);
         } else if (['.json', '.csv', '.xml', '.yml', '.yaml'].includes(extension)) {
             try {
                 const data = extension === '.json' ? JSON.parse(content) : content;
                 const formattedContent = JSON.stringify(data, null, 2);
-                await addContentPages(pdfDoc, filePathText, formattedContent, font, 8, 10, 740, 520);
+                await addContentPages(pdfDoc, filePathText, formattedContent, font, 8, 10, 740);
             } catch {
-                await addContentPages(pdfDoc, filePathText, content, font, 8, 10, 740, 520);
+                await addContentPages(pdfDoc, filePathText, content, font, 8, 10, 740);
             }
         } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp'].includes(extension)) {
             try {
@@ -259,14 +364,20 @@ async function createPDF(folderPath, options = {}) {
                 continue;
             }
         } else if (['.txt', '.md', '.html', '.css'].includes(extension)) {
-            await addContentPages(pdfDoc, filePathText, content, font, 8, 10, 740, 520);
+            await addContentPages(pdfDoc, filePathText, content, font, 8, 10, 740);
+        }
+
+        const endPage = pdfDoc.getPageCount();
+        if (endPage >= startPage) {
+            tocEntries.push({ path: path.relative(folderPath, file).replace(/\\/g, '/'), page: startPage });
         }
     }
 
+    await addTOCPage(pdfDoc, tocEntries);
     await addFooterPage(pdfDoc, folderName);
     setMetadata(pdfDoc, folderName);
     const pdfBytes = await pdfDoc.save();
     return { pdfBytes, folderName };
 }
 
-module.exports = { createPDF, collectFiles, addContentPages, addHeaderPage, addImageFilePage, addFooterPage, setMetadata, loadGitIgnoreRules, shouldSkip, DEFAULT_SKIP_DIRS, DEFAULT_SKIP_FILES };
+module.exports = { createPDF, collectFiles, addContentPages, addHeaderPage, addImageFilePage, addFooterPage, setMetadata, loadGitIgnoreRules, shouldSkip, DEFAULT_SKIP_DIRS, DEFAULT_SKIP_FILES, generateProjectTree, addLineNumbers, addTreePage, addTOCPage };

@@ -66,11 +66,11 @@ describe('pdfGenerator', function () {
             assert.strictEqual(result.folderName, 'sample-project');
         });
 
-        it('should generate a PDF with at least a header page and some content pages', async function () {
+        it('should generate a PDF with all expected pages', async function () {
             const { pdfBytes } = await createPDF(FIXTURE_DIR);
             const pdfDoc = await pdf.PDFDocument.load(pdfBytes);
-            assert.ok(pdfDoc.getPageCount() >= 2,
-                `Expected at least 2 pages (header + content), got ${pdfDoc.getPageCount()}`);
+            assert.ok(pdfDoc.getPageCount() >= 4,
+                `Expected at least 4 pages (header + tree + content + TOC), got ${pdfDoc.getPageCount()}`);
         });
 
         it('should set PDF metadata', async function () {
@@ -123,12 +123,56 @@ describe('pdfGenerator', function () {
         });
     });
 
+    describe('addLineNumbers', function () {
+        it('should add line numbers to content', function () {
+            const result = pdfGenerator.addLineNumbers('a\nb\nc', 1);
+            assert.strictEqual(result, '1 | a\n2 | b\n3 | c');
+        });
+
+        it('should pad line numbers correctly for multi-digit counts', function () {
+            const lines = Array.from({ length: 15 }, (_, i) => `line${i + 1}`);
+            const result = pdfGenerator.addLineNumbers(lines.join('\n'), 1);
+            const outLines = result.split('\n');
+            assert.ok(outLines[0].startsWith(' 1 | '));
+            assert.ok(outLines[14].startsWith('15 | '));
+        });
+
+        it('should handle custom start line', function () {
+            const result = pdfGenerator.addLineNumbers('hello\nworld', 10);
+            assert.strictEqual(result, '10 | hello\n11 | world');
+        });
+    });
+
+    describe('generateProjectTree', function () {
+        it('should generate a tree from a list of files', function () {
+            const files = [
+                path.join(FIXTURE_DIR, 'src', 'index.js'),
+                path.join(FIXTURE_DIR, 'src', 'utils.py'),
+                path.join(FIXTURE_DIR, 'README.md')
+            ];
+            const tree = pdfGenerator.generateProjectTree(files, FIXTURE_DIR);
+            assert.ok(tree.includes('index.js'));
+            assert.ok(tree.includes('utils.py'));
+            assert.ok(tree.includes('README.md'));
+            assert.ok(tree.includes('src/'));
+        });
+    });
+
+    describe('TOC generation', function () {
+        it('should include correct page numbers in TOC', async function () {
+            const { pdfBytes } = await createPDF(FIXTURE_DIR);
+            const pdfDoc = await pdf.PDFDocument.load(pdfBytes);
+            const pages = pdfDoc.getPageCount();
+            assert.ok(pages >= 4);
+        });
+    });
+
     describe('Bug fixes', function () {
         it('should handle multi-line content without crashing', async function () {
             const multiLine = 'line1\nline2\nline3\nline4\nline5';
             const pdfDoc = await pdf.PDFDocument.create();
             const font = await pdfDoc.embedFont(pdf.StandardFonts.Courier);
-            await pdfGenerator.addContentPages(pdfDoc, 'test.js', multiLine, font, 8, 10, 740, 520);
+            await pdfGenerator.addContentPages(pdfDoc, 'test.js', multiLine, font, 8, 10, 740);
             assert.ok(pdfDoc.getPageCount() >= 1);
         });
 
