@@ -166,3 +166,4 @@ all-to-pdf/node_modules
 
 # Generated PDFs
 **/PDF Compiled Project.pdf
+all-to-pdf/*.pdf

@@ -1,27 +1,32 @@
 # Project to PDF — AI Facilitator
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.0.1-blue)](https://marketplace.visualstudio.com/items?itemName=all-to-pdf)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**Project to PDF** is a Visual Studio Code extension that compiles your entire project folder into a single, well-structured PDF document — optimized for sharing with AI models, code review, and documentation archival.
+**Project to PDF** is a Visual Studio Code extension that compiles your entire source code repository into a single, well-structured PDF document — designed to be uploaded to **AI chat models** (ChatGPT, Claude, Gemini, etc.) so they can understand your full project context in one shot.
 
-## Why?
+Stop pasting individual files. Give the AI the whole picture.
 
-- **AI context upload** — give your AI chatbot the full codebase in one file
-- **Code review** — share a portable, paginated document with reviewers
-- **IP archival** — snapshot your project state with metadata and structure
+## Mission
+
+Modern AI models accept file uploads and can reason about entire codebases — but only if you give them the full context. This extension bridges the gap between your IDE and your AI assistant by generating a PDF that contains:
+
+- Every source file, with **line numbers** for precise referencing
+- The **directory tree** so the AI understands the project layout
+- A **table of contents** with page numbers for file-level navigation
+- **Visual separators** between files so the AI can clearly identify context boundaries
 
 ## Features
 
 ### PDF Structure
-Each generated PDF includes:
 
-- **Title page** with project name
-- **Directory tree** — ASCII project structure for instant orientation
-- **File contents** with **line numbers** on all code files
-- **Visual separators** between files for clear AI context boundaries
-- **Table of contents** — every file listed with its starting page number
-- **Footer** with generation date and link to the extension repository
+| Page | Content |
+|------|---------|
+| 1 | **Title page** with project name |
+| 2 | **Directory tree** — full ASCII project structure |
+| 3+ | **File contents** with line numbers (code) or formatted (data) |
+| Last | **Table of contents** — every file → starting page number |
+| Footer | Generation date + link to this extension |
 
 ### Supported File Types
 
@@ -33,10 +38,11 @@ Each generated PDF includes:
 | Text | `.txt`, `.md`, `.html`, `.css` |
 
 ### Smart File Filtering
-- Respects `.gitignore` rules automatically
-- Skips common junk directories: `node_modules`, `.git`, `dist`, `build`, `__pycache__`, `venv`, `vendor`, `coverage`, and more
+
+- Respects `.gitignore` rules automatically — only the files that matter
+- Skips common junk directories: `node_modules`, `.git`, `dist`, `build`, `__pycache__`, `venv`, `coverage`, and more
 - Configurable exclude patterns via VS Code settings
-- Gracefully handles binary files without crashing
+- Gracefully handles binary and non-UTF-8 files
 
 ## Installation
 
@@ -48,31 +54,29 @@ Each generated PDF includes:
 ## Usage
 
 1. **Right-click** any folder in the Explorer view
-2. Select **Compile Folder to PDF** from the context menu
-3. Wait for the progress notification to complete
-4. Find `PDF Compiled Project.pdf` in the selected folder
+2. Select **Compile Folder to PDF**
+3. Wait for the progress notification
+4. Open `PDF Compiled Project.pdf` — upload it to your preferred AI
 
-You can also run the command palette (`Ctrl+Shift+P`) and search for **Compile Folder to PDF**.
+You can also use the command palette (`Ctrl+Shift+P`) → **Compile Folder to PDF**.
 
 ## Extension Settings
-
-This extension contributes the following settings:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `allToPdf.useGitIgnore` | `true` | Respect `.gitignore` rules when collecting files |
-| `allToPdf.exclude` | `[]` | Additional directory or file names to exclude (e.g., `my-secrets`) |
-| `allToPdf.maxFileSizeKb` | `1024` | Maximum file size in KB to include (0 for no limit) |
+| `allToPdf.exclude` | `[]` | Additional directory or file names to exclude |
+| `allToPdf.maxFileSizeKb` | `1024` | Maximum file size in KB to include (0 = no limit) |
 
 ## Example Output
 
 ```
 PDF Compiled Project.pdf
-├── Page 1 — Title: "Compiled PDF — Project: my-app"
-├── Page 2 — Directory tree
-├── Pages 3–7 — File contents (numbered lines)
-├── Page 8 — Table of Contents
-└── Footer with date & extension link
+  Page 1  ── Title: "Compiled PDF — Project: my-app"
+  Page 2  ── Directory tree
+  Pages 3–7 ── File contents with line numbers
+  Page 8  ── Table of Contents
+  Footer  ── "PDF created on ... with All to PDF extension"
 ```
 
 ## Requirements
@@ -82,8 +86,8 @@ PDF Compiled Project.pdf
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) — free to use, modify, and distribute.
 
 ---
 
-*Contributions and suggestions are welcome!*
+*Contributions, issues, and feature requests are welcome.*
