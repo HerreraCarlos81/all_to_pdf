@@ -163,3 +163,6 @@ cython_debug/
 all-to-pdf/vsc-extension-quickstart.md
 all-to-pdf/.vscode/
 all-to-pdf/node_modules
+
+# Generated PDFs
+**/PDF Compiled Project.pdf
