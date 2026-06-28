@@ -18,20 +18,41 @@ describe('pdfGenerator', function () {
     });
 
     describe('collectFiles', function () {
+        const defaultCollectOpts = {
+            skipDirs: pdfGenerator.DEFAULT_SKIP_DIRS,
+            skipFiles: pdfGenerator.DEFAULT_SKIP_FILES,
+            gitIgnoreFilter: null,
+            rootPath: FIXTURE_DIR
+        };
+
         it('should collect all files recursively from a directory', async function () {
-            const files = await collectFiles(FIXTURE_DIR);
+            const files = await collectFiles(FIXTURE_DIR, defaultCollectOpts);
             const relativeFiles = files.map(f => path.relative(FIXTURE_DIR, f)).sort();
             assert.ok(relativeFiles.includes(path.join('src', 'index.js')));
             assert.ok(relativeFiles.includes(path.join('src', 'utils.py')));
             assert.ok(relativeFiles.includes(path.join('data', 'config.json')));
             assert.ok(relativeFiles.includes('README.md'));
-            assert.ok(relativeFiles.includes('.gitignore'));
+        });
+
+        it('should skip default directories like node_modules', async function () {
+            const nmDir = path.join(FIXTURE_DIR, 'node_modules');
+            const nmFile = path.join(nmDir, 'lodash', 'index.js');
+            await fs.ensureDir(path.dirname(nmFile));
+            await fs.writeFile(nmFile, 'module.exports = {};');
+            try {
+                const files = await collectFiles(FIXTURE_DIR, defaultCollectOpts);
+                const relative = files.map(f => path.relative(FIXTURE_DIR, f));
+                assert.ok(!relative.includes('node_modules'));
+                assert.ok(!relative.some(f => f.startsWith('node_modules')));
+            } finally {
+                await fs.remove(nmDir);
+            }
         });
 
         it('should return an empty array for an empty directory', async function () {
             const emptyDir = path.join(OUTPUT_DIR, 'empty');
             await fs.ensureDir(emptyDir);
-            const files = await collectFiles(emptyDir);
+            const files = await collectFiles(emptyDir, defaultCollectOpts);
             assert.strictEqual(files.length, 0);
         });
     });
@@ -78,6 +99,30 @@ describe('pdfGenerator', function () {
         });
     });
 
+    describe('File filtering', function () {
+        it('should respect .gitignore rules when gitIgnoreFilter is provided', async function () {
+            const filteredDir = path.join(OUTPUT_DIR, 'gitignore-test');
+            await fs.ensureDir(path.join(filteredDir, 'src'));
+            await fs.ensureDir(path.join(filteredDir, 'temp'));
+            await fs.writeFile(path.join(filteredDir, 'src', 'index.js'), 'ok');
+            await fs.writeFile(path.join(filteredDir, 'temp', 'cache.txt'), 'ignored');
+            await fs.writeFile(path.join(filteredDir, '.gitignore'), 'temp/');
+
+            const gitIgnoreFilter = await pdfGenerator.loadGitIgnoreRules(filteredDir);
+            const opts = {
+                skipDirs: new Set(),
+                skipFiles: new Set(),
+                gitIgnoreFilter,
+                rootPath: filteredDir
+            };
+            const files = await collectFiles(filteredDir, opts);
+            const relative = files.map(f => path.relative(filteredDir, f));
+            assert.ok(relative.includes(path.join('src', 'index.js')));
+            assert.ok(!relative.some(f => f.startsWith('temp')));
+            await fs.remove(filteredDir);
+        });
+    });
+
     describe('Bug fixes', function () {
         it('should handle multi-line content without crashing', async function () {
             const multiLine = 'line1\nline2\nline3\nline4\nline5';
@@ -91,7 +136,13 @@ describe('pdfGenerator', function () {
             const fixture = path.join(FIXTURE_DIR, 'should-be-skipped.bin');
             await fs.writeFile(fixture, Buffer.from([0x89, 0x50, 0x4E, 0x47])); // PNG header
             try {
-                const files = await collectFiles(FIXTURE_DIR);
+                const opts = {
+                    skipDirs: pdfGenerator.DEFAULT_SKIP_DIRS,
+                    skipFiles: pdfGenerator.DEFAULT_SKIP_FILES,
+                    gitIgnoreFilter: null,
+                    rootPath: FIXTURE_DIR
+                };
+                const files = await collectFiles(FIXTURE_DIR, opts);
                 assert.ok(files.includes(fixture));
                 const result = await createPDF(FIXTURE_DIR);
                 assert.ok(result.pdfBytes.length > 0);

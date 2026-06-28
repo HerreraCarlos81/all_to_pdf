@@ -1,17 +1,62 @@
 const fs = require('fs-extra');
 const pdf = require('pdf-lib');
 const path = require('path');
+const ignore = require('ignore');
 
-async function collectFiles(folderPath) {
+const DEFAULT_SKIP_DIRS = new Set([
+    'node_modules', '.git', 'dist', 'build', '.next', '.nuxt',
+    'target', 'out', '.output', '.vercel', '.cache',
+    '__pycache__', '.venv', 'venv', 'env', '.env',
+    'vendor', '.bundle', 'coverage', '.nyc_output'
+]);
+
+const DEFAULT_SKIP_FILES = new Set([
+    'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
+    '.DS_Store', 'Thumbs.db'
+]);
+
+async function loadGitIgnoreRules(folderPath) {
+    const ig = ignore();
+    const gitignorePath = path.join(folderPath, '.gitignore');
+    try {
+        const content = await fs.readFile(gitignorePath, 'utf8');
+        ig.add(content);
+    } catch {
+        // No .gitignore found
+    }
+    return ig;
+}
+
+function shouldSkip(entryPath, entryName, isDir, options) {
+    const { skipDirs, skipFiles, gitIgnoreFilter, rootPath } = options;
+
+    if (isDir) {
+        if (skipDirs.has(entryName)) return true;
+    } else {
+        if (skipFiles.has(entryName)) return true;
+    }
+
+    if (gitIgnoreFilter) {
+        const relativePath = path.relative(rootPath, entryPath).replace(/\\/g, '/');
+        if (gitIgnoreFilter.ignores(relativePath)) return true;
+        if (isDir && gitIgnoreFilter.ignores(`${relativePath}/`)) return true;
+    }
+
+    return false;
+}
+
+async function collectFiles(folderPath, options = {}) {
     const files = [];
     const entries = await fs.readdir(folderPath, { withFileTypes: true });
 
     for (const entry of entries) {
         const fullPath = path.join(folderPath, entry.name);
         if (entry.isDirectory()) {
-            const subFiles = await collectFiles(fullPath);
+            if (shouldSkip(fullPath, entry.name, true, options)) continue;
+            const subFiles = await collectFiles(fullPath, options);
             files.push(...subFiles);
         } else {
+            if (shouldSkip(fullPath, entry.name, false, options)) continue;
             files.push(fullPath);
         }
     }
@@ -167,8 +212,21 @@ function setMetadata(pdfDoc, folderName) {
     pdfDoc.setKeywords([folderName, 'project', 'compilation', 'PDF']);
 }
 
-async function createPDF(folderPath) {
-    const files = await collectFiles(folderPath);
+async function createPDF(folderPath, options = {}) {
+    const skipDirs = new Set([...DEFAULT_SKIP_DIRS, ...(options.skipDirs || [])]);
+    const skipFiles = new Set([...DEFAULT_SKIP_FILES, ...(options.skipFiles || [])]);
+    const useGitIgnore = options.useGitIgnore !== false;
+
+    let gitIgnoreFilter = null;
+    let rootPath = folderPath;
+
+    if (useGitIgnore) {
+        gitIgnoreFilter = await loadGitIgnoreRules(folderPath);
+    }
+
+    const collectOptions = { skipDirs, skipFiles, gitIgnoreFilter, rootPath };
+    const files = await collectFiles(folderPath, collectOptions);
+
     const pdfDoc = await pdf.PDFDocument.create();
     const folderName = path.basename(folderPath);
     addHeaderPage(pdfDoc, folderName);
@@ -211,4 +269,4 @@ async function createPDF(folderPath) {
     return { pdfBytes, folderName };
 }
 
-module.exports = { createPDF, collectFiles, addContentPages, addHeaderPage, addImageFilePage, addFooterPage, setMetadata };
+module.exports = { createPDF, collectFiles, addContentPages, addHeaderPage, addImageFilePage, addFooterPage, setMetadata, loadGitIgnoreRules, shouldSkip, DEFAULT_SKIP_DIRS, DEFAULT_SKIP_FILES };
