@@ -1,7 +1,7 @@
 {
   "name": "all-to-pdf",
   "displayName": "Project to PDF - AI Facilitator",
-  "description": "Introducing \"Project to PDF\" - the ultimate Visual Studio Code extension that simplifies the process of converting your entire project folder into a comprehensive PDF document. Say goodbye to the hassle of manually combining code files, JSON, CSV, and images into a single presentable file.",
+  "description": "Compile your entire project folder into a single PDF with line numbers, table of contents, directory tree, .gitignore support, and AI-friendly formatting.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.88.0"
