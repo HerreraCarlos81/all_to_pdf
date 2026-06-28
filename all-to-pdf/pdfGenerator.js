@@ -340,6 +340,7 @@ async function createPDF(folderPath, options = {}) {
         let content;
         try {
             content = await fs.readFile(file, 'utf8');
+            content = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\t/g, '    ');
         } catch {
             continue;
         }
