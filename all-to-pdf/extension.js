@@ -33,12 +33,18 @@ async function generatePdfWithProgress(folderPath) {
         title: 'Generating project PDF...',
         cancellable: false,
     }, async () => {
-        const { pdfBytes, folderName } = await createPDF(folderPath, settings);
-        const outputPath = path.join(folderPath, 'PDF Compiled Project.pdf');
-        require('fs-extra').writeFile(outputPath, pdfBytes);
-        vscode.window.showInformationMessage(
-            `PDF successfully generated for "${folderName}" by All-to-PDF Extension!`
-        );
+        try {
+            const { pdfBytes, folderName } = await createPDF(folderPath, settings);
+            const outputPath = path.join(folderPath, 'PDF Compiled Project.pdf');
+            await require('fs-extra').writeFile(outputPath, pdfBytes);
+            vscode.window.showInformationMessage(
+                `PDF successfully generated for "${folderName}" by All-to-PDF Extension!`
+            );
+        } catch (err) {
+            vscode.window.showErrorMessage(
+                `All-to-PDF: ${err.message || err}`
+            );
+        }
     });
 }
 

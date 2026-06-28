@@ -1,8 +1,9 @@
 {
   "name": "all-to-pdf",
+  "publisher": "CodedNeurons",
   "displayName": "Project to PDF - AI Facilitator",
   "description": "Compile your entire project folder into a single PDF with line numbers, table of contents, directory tree, .gitignore support, and AI-friendly formatting.",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.88.0"
   },
@@ -74,6 +75,7 @@
     "eslint": "^8.57.0",
     "mocha": "^10.4.0",
     "typescript": "^5.4.5",
+    "vsce": "^2.15.0",
     "vscode": "^1.1.37"
   },
   "dependencies": {
