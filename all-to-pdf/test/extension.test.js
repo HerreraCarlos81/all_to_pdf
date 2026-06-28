@@ -2,7 +2,8 @@ const assert = require('assert');
 const path = require('path');
 const fs = require('fs-extra');
 const pdf = require('pdf-lib');
-const { createPDF, collectFiles, addContentPages, addContentPage, addHeaderPage, setMetadata } = require('../pdfGenerator');
+const pdfGenerator = require('../pdfGenerator');
+const { createPDF, collectFiles, addHeaderPage, setMetadata } = pdfGenerator;
 
 const FIXTURE_DIR = path.join(__dirname, 'fixtures', 'sample-project');
 const OUTPUT_DIR = path.join(__dirname, 'output');
@@ -74,6 +75,29 @@ describe('pdfGenerator', function () {
             assert.strictEqual(pdfDoc.getTitle(), 'my-project');
             assert.strictEqual(pdfDoc.getAuthor(), 'Created with All to PDF - AI Facilitator');
             assert.strictEqual(pdfDoc.getSubject(), 'PDF generated from project files');
+        });
+    });
+
+    describe('Bug fixes', function () {
+        it('should handle multi-line content without crashing', async function () {
+            const multiLine = 'line1\nline2\nline3\nline4\nline5';
+            const pdfDoc = await pdf.PDFDocument.create();
+            const font = await pdfDoc.embedFont(pdf.StandardFonts.Courier);
+            await pdfGenerator.addContentPages(pdfDoc, 'test.js', multiLine, font, 8, 10, 740, 520);
+            assert.ok(pdfDoc.getPageCount() >= 1);
+        });
+
+        it('should handle binary/non-utf8 files without crashing', async function () {
+            const fixture = path.join(FIXTURE_DIR, 'should-be-skipped.bin');
+            await fs.writeFile(fixture, Buffer.from([0x89, 0x50, 0x4E, 0x47])); // PNG header
+            try {
+                const files = await collectFiles(FIXTURE_DIR);
+                assert.ok(files.includes(fixture));
+                const result = await createPDF(FIXTURE_DIR);
+                assert.ok(result.pdfBytes.length > 0);
+            } finally {
+                await fs.remove(fixture);
+            }
         });
     });
 });

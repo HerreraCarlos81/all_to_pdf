@@ -20,59 +20,54 @@ async function collectFiles(folderPath) {
 }
 
 async function addContentPages(pdfDoc, filePathText, content, font, fontSize, lineHeight, maxWidth, maxHeight) {
+    const pageWidth = 841.89;
+    const pageHeight = 595.28;
+    const marginLeft = 50;
+    const marginBottom = 50;
+    const marginTop = 60;
     const lines = content.split('\n');
-    let pageContent = '';
-    let y = maxHeight;
-    let isFirstPage = true;
+    let page = pdfDoc.addPage([pageWidth, pageHeight]);
+    let y = pageHeight - marginTop;
+    let filePathDrawn = false;
 
     for (const line of lines) {
         const words = line.split(' ');
-        let lineContent = '';
+        let lineText = '';
 
         for (const word of words) {
-            const tempLine = `${lineContent} ${word}`.trim();
-            const tempWidth = font.widthOfTextAtSize(tempLine, fontSize);
+            const testLine = lineText ? `${lineText} ${word}` : word;
+            const testWidth = font.widthOfTextAtSize(testLine, fontSize);
 
-            if (tempWidth > maxWidth) {
-                if (y - lineHeight < 50) {
-                    await addContentPage(pdfDoc, filePathText, pageContent, font, fontSize, isFirstPage);
-                    pageContent = '';
-                    y = maxHeight;
-                    isFirstPage = false;
+            if (testWidth > maxWidth && lineText) {
+                if (y - lineHeight < marginBottom) {
+                    page = pdfDoc.addPage([pageWidth, pageHeight]);
+                    y = pageHeight - marginTop;
+                    filePathDrawn = false;
                 }
-                pageContent += `${lineContent}\n`;
-                lineContent = word;
+                if (!filePathDrawn) {
+                    page.drawText(filePathText, { x: marginLeft, y: pageHeight - 45, size: 9, font });
+                    filePathDrawn = true;
+                }
+                page.drawText(lineText, { x: marginLeft, y, size: fontSize, font, maxWidth });
                 y -= lineHeight;
+                lineText = word;
             } else {
-                lineContent = tempLine;
+                lineText = testLine;
             }
         }
 
-        if (y - lineHeight < 50) {
-            await addContentPage(pdfDoc, filePathText, pageContent, font, fontSize, isFirstPage);
-            pageContent = '';
-            y = maxHeight;
-            isFirstPage = false;
+        if (y - lineHeight < marginBottom) {
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            y = pageHeight - marginTop;
+            filePathDrawn = false;
         }
-        pageContent += `${lineContent}\n`;
+        if (!filePathDrawn) {
+            page.drawText(filePathText, { x: marginLeft, y: pageHeight - 45, size: 9, font });
+            filePathDrawn = true;
+        }
+        page.drawText(lineText, { x: marginLeft, y, size: fontSize, font, maxWidth });
         y -= lineHeight;
     }
-
-    if (pageContent.trim() !== '') {
-        await addContentPage(pdfDoc, filePathText, pageContent, font, fontSize, isFirstPage);
-    }
-}
-
-async function addContentPage(pdfDoc, filePathText, content, font, fontSize, isFirstPage) {
-    const page = pdfDoc.addPage([841.89, 595.28]);
-    const { width, height } = page.getSize();
-    const pageWidth = width - 100;
-    const pageHeight = height - 120;
-
-    if (isFirstPage) {
-        page.drawText(filePathText, { x: 50, y: height - 50, size: 10, font });
-    }
-    page.drawText(content, { x: 50, y: height - 70, size: fontSize, font, maxWidth: pageWidth, lineHeight: fontSize * 1.2 });
 }
 
 function addHeaderPage(pdfDoc, folderName) {
@@ -123,7 +118,6 @@ async function addFooterPage(pdfDoc, folderName) {
     const font = await pdfDoc.embedFont(pdf.StandardFonts.Helvetica);
     const textWidth = font.widthOfTextAtSize(footerText, footerFontSize);
     const linkWidth = font.widthOfTextAtSize(linkText, footerFontSize);
-    const extensionWidth = font.widthOfTextAtSize(extensionText, footerFontSize);
 
     lastPage.drawText(footerText, {
         x: footerX + 10,
@@ -178,7 +172,7 @@ async function createPDF(folderPath) {
     const pdfDoc = await pdf.PDFDocument.create();
     const folderName = path.basename(folderPath);
     addHeaderPage(pdfDoc, folderName);
-    const font = await pdfDoc.embedFont(pdf.StandardFonts.Helvetica);
+    const font = await pdfDoc.embedFont(pdf.StandardFonts.Courier);
 
     for (const file of files) {
         const extension = path.extname(file).toLowerCase();
@@ -191,14 +185,14 @@ async function createPDF(folderPath) {
         const filePathText = `Content of the file: ${file}`;
 
         if (['.js', '.ts', '.py', '.java', '.c', '.cpp', '.cs', '.php', '.rb', '.go'].includes(extension)) {
-            await addContentPages(pdfDoc, filePathText, content, font, 8, 10, 750, 520);
+            await addContentPages(pdfDoc, filePathText, content, font, 8, 10, 740, 520);
         } else if (['.json', '.csv', '.xml', '.yml', '.yaml'].includes(extension)) {
             try {
                 const data = extension === '.json' ? JSON.parse(content) : content;
                 const formattedContent = JSON.stringify(data, null, 2);
-                await addContentPages(pdfDoc, filePathText, formattedContent, font, 8, 10, 750, 520);
+                await addContentPages(pdfDoc, filePathText, formattedContent, font, 8, 10, 740, 520);
             } catch {
-                await addContentPages(pdfDoc, filePathText, content, font, 8, 10, 750, 520);
+                await addContentPages(pdfDoc, filePathText, content, font, 8, 10, 740, 520);
             }
         } else if (['.jpg', '.jpeg', '.png', '.gif', '.bmp'].includes(extension)) {
             try {
@@ -207,7 +201,7 @@ async function createPDF(folderPath) {
                 continue;
             }
         } else if (['.txt', '.md', '.html', '.css'].includes(extension)) {
-            await addContentPages(pdfDoc, filePathText, content, font, 8, 10, 750, 520);
+            await addContentPages(pdfDoc, filePathText, content, font, 8, 10, 740, 520);
         }
     }
 
@@ -217,4 +211,4 @@ async function createPDF(folderPath) {
     return { pdfBytes, folderName };
 }
 
-module.exports = { createPDF, collectFiles, addContentPages, addContentPage, addHeaderPage, addImageFilePage, addFooterPage, setMetadata };
+module.exports = { createPDF, collectFiles, addContentPages, addHeaderPage, addImageFilePage, addFooterPage, setMetadata };
