@@ -3,7 +3,7 @@
   "publisher": "CodedNeurons",
   "displayName": "Project to PDF - AI Facilitator",
   "description": "Compile your entire project folder into a single PDF with line numbers, table of contents, directory tree, .gitignore support, and AI-friendly formatting.",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "engines": {
     "vscode": "^1.88.0"
   },

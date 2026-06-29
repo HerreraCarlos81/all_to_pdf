@@ -173,6 +173,41 @@ function renderTreeLines(node, prefix) {
 }
 
 // ---------------------------------------------------------------------------
+// PDF text sanitization
+// ---------------------------------------------------------------------------
+
+/**
+ * Replaces characters outside the WinAnsi encoding range (code > 255) that
+ * would cause pdf-lib standard fonts to throw. Common Unicode punctuation
+ * and box-drawing chars are mapped to ASCII equivalents; everything else
+ * becomes '?'.
+ * @param {string} text - Raw text to sanitize.
+ * @returns {string} Text safe for pdf-lib standard font drawing.
+ */
+function sanitizeText(text) {
+    const map = {
+        '\u2018': "'", '\u2019': "'", '\u201A': "'", '\u201B': "'",
+        '\u201C': '"', '\u201D': '"', '\u201E': '"',
+        '\u2013': '-', '\u2014': '-', '\u2015': '-',
+        '\u2026': '...', '\u2022': '*',
+        '\u2500': '-', '\u2502': '|',
+        '\u250C': '|--', '\u2510': '|--', '\u2514': '|__', '\u2518': '|__',
+        '\u251C': '|--', '\u2524': '|--', '\u252C': '|--',
+        '\u2534': '|__', '\u253C': '+',
+    };
+    let result = '';
+    for (let i = 0; i < text.length; i++) {
+        const code = text.charCodeAt(i);
+        if (code <= 0xFF) {
+            result += text[i];
+        } else {
+            result += map[text[i]] || '?';
+        }
+    }
+    return result;
+}
+
+// ---------------------------------------------------------------------------
 // Text formatting
 // ---------------------------------------------------------------------------
 
@@ -203,7 +238,7 @@ function addLineNumbers(content, startLine) {
  * @param {object} font - pdf-lib PDFFont instance.
  */
 function drawFileHeader(page, filePathText, font) {
-    page.drawText(filePathText, { x: MARGIN_LEFT, y: PAGE_HEIGHT - 45, size: 9, font });
+    page.drawText(sanitizeText(filePathText), { x: MARGIN_LEFT, y: PAGE_HEIGHT - 45, size: 9, font });
     page.drawLine({
         start: { x: MARGIN_LEFT, y: PAGE_HEIGHT - 50 },
         end: { x: PAGE_WIDTH - MARGIN_LEFT, y: PAGE_HEIGHT - 50 },
@@ -248,7 +283,7 @@ async function addContentPages(pdfDoc, filePathText, content, font, fontSize, li
                     drawFileHeader(currentPage, filePathText, font);
                     headerDrawn = true;
                 }
-                currentPage.drawText(currentLine, { x: MARGIN_LEFT, y: currentY, size: fontSize, font, maxWidth });
+                currentPage.drawText(sanitizeText(currentLine), { x: MARGIN_LEFT, y: currentY, size: fontSize, font, maxWidth });
                 currentY -= lineHeight;
                 currentLine = word;
             } else {
@@ -266,7 +301,7 @@ async function addContentPages(pdfDoc, filePathText, content, font, fontSize, li
             drawFileHeader(currentPage, filePathText, font);
             headerDrawn = true;
         }
-        currentPage.drawText(currentLine, { x: MARGIN_LEFT, y: currentY, size: fontSize, font, maxWidth });
+        currentPage.drawText(sanitizeText(currentLine), { x: MARGIN_LEFT, y: currentY, size: fontSize, font, maxWidth });
         currentY -= lineHeight;
     }
 }
@@ -278,7 +313,7 @@ async function addContentPages(pdfDoc, filePathText, content, font, fontSize, li
  */
 function addTitlePage(pdfDoc, folderName) {
     const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    page.drawText(`Compiled PDF\n\nProject: ${folderName}`, { x: 300, y: PAGE_HEIGHT - 200, size: 36 });
+    page.drawText(sanitizeText(`Compiled PDF\n\nProject: ${folderName}`), { x: 300, y: PAGE_HEIGHT - 200, size: 36 });
 }
 
 /**
@@ -294,20 +329,20 @@ async function addTreePage(pdfDoc, treeText, folderName, fileCount) {
     const lines = treeText.split('\n').filter(line => line.trim().length > 0);
     let currentY = PAGE_HEIGHT - MARGIN_TOP + 10;
 
-    page.drawText(`Project Structure: ${folderName}`, { x: MARGIN_LEFT, y: currentY, size: 14, font });
+    page.drawText(sanitizeText(`Project Structure: ${folderName}`), { x: MARGIN_LEFT, y: currentY, size: 14, font });
     currentY -= 30;
 
     const separator = '='.repeat(50);
-    page.drawText(separator, { x: MARGIN_LEFT, y: currentY, size: 10, font });
+    page.drawText(sanitizeText(separator), { x: MARGIN_LEFT, y: currentY, size: 10, font });
     currentY -= 20;
 
     for (const line of lines) {
-        page.drawText(line, { x: MARGIN_LEFT, y: currentY, size: 8, font });
+        page.drawText(sanitizeText(line), { x: MARGIN_LEFT, y: currentY, size: 8, font });
         currentY -= 12;
     }
 
     currentY -= 10;
-    page.drawText(`(${fileCount} files total)`, { x: MARGIN_LEFT, y: currentY, size: 10, font });
+    page.drawText(sanitizeText(`(${fileCount} files total)`), { x: MARGIN_LEFT, y: currentY, size: 10, font });
 }
 
 /**
@@ -320,18 +355,18 @@ async function addTableOfContentsPage(pdfDoc, tocEntries) {
     const font = await pdfDoc.embedFont(pdf.StandardFonts.Courier);
     let currentY = PAGE_HEIGHT - MARGIN_TOP + 10;
 
-    page.drawText('Table of Contents', { x: MARGIN_LEFT, y: currentY, size: 14, font });
+    page.drawText(sanitizeText('Table of Contents'), { x: MARGIN_LEFT, y: currentY, size: 14, font });
     currentY -= 30;
 
     const separator = '='.repeat(60);
-    page.drawText(separator, { x: MARGIN_LEFT, y: currentY, size: 10, font });
+    page.drawText(sanitizeText(separator), { x: MARGIN_LEFT, y: currentY, size: 10, font });
     currentY -= 20;
 
     for (const entry of tocEntries) {
         if (currentY < MARGIN_BOTTOM + 20) break;
         const pageNumber = String(entry.page);
         const dotGap = '.'.repeat(Math.max(1, 60 - entry.path.length - pageNumber.length - 2));
-        page.drawText(`${entry.path} ${dotGap} ${pageNumber}`, { x: MARGIN_LEFT, y: currentY, size: 8, font });
+        page.drawText(sanitizeText(`${entry.path} ${dotGap} ${pageNumber}`), { x: MARGIN_LEFT, y: currentY, size: 8, font });
         currentY -= 12;
     }
 }
@@ -363,7 +398,7 @@ async function addImagePage(pdfDoc, filePathText, file, extension) {
     const centerX = (page.getWidth() - displayWidth) / 2;
     const centerY = ((page.getHeight() - displayHeight) / 2) - 20;
 
-    page.drawText(filePathText, { x: MARGIN_LEFT, y: page.getHeight() - 50, size: 10 });
+    page.drawText(sanitizeText(filePathText), { x: MARGIN_LEFT, y: page.getHeight() - 50, size: 10 });
     page.drawImage(image, { x: centerX, y: centerY, width: displayWidth, height: displayHeight });
 }
 
@@ -395,13 +430,13 @@ async function addFooterPage(pdfDoc, _folderName) {
     const labelWidth = font.widthOfTextAtSize(footerLabel, fontSize);
     const linkWidth = font.widthOfTextAtSize(linkLabel, fontSize);
 
-    lastPage.drawText(footerLabel, {
+    lastPage.drawText(sanitizeText(footerLabel), {
         x: barX + 10, y: barY + 2, size: fontSize, font, color: pdf.rgb(0, 0, 0),
     });
 
     const linkX = barX + 10 + labelWidth;
     const linkY = barY + 2;
-    lastPage.drawText(linkLabel, {
+    lastPage.drawText(sanitizeText(linkLabel), {
         x: linkX, y: linkY, size: fontSize, font,
         color: pdf.rgb(0, 0, 1), underline: true,
     });
@@ -415,7 +450,7 @@ async function addFooterPage(pdfDoc, _folderName) {
     });
     lastPage.node.addAnnot(linkAnnotation);
 
-    lastPage.drawText(footerSuffix, {
+    lastPage.drawText(sanitizeText(footerSuffix), {
         x: barX + 10 + labelWidth + linkWidth, y: barY + 2,
         size: fontSize, font, color: pdf.rgb(0, 0, 0),
     });
@@ -502,6 +537,7 @@ async function createPDF(folderPath, options = {}) {
                 .replace(/\r\n/g, '\n')  // Normalize Windows line endings
                 .replace(/\r/g, '\n')    // Normalize old Mac line endings
                 .replace(/\t/g, '    '); // Replace tabs with spaces (WinAnsi limitation)
+            rawContent = sanitizeText(rawContent);
         } catch {
             continue; // Skip binary or unreadable files
         }
@@ -569,4 +605,5 @@ module.exports = {
     addLineNumbers,
     addTreePage,
     addTableOfContentsPage,
+    sanitizeText,
 };

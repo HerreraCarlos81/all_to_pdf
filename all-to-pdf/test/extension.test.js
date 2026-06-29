@@ -247,5 +247,11 @@ describe('pdfGenerator', function () {
             const document = await pdf.PDFDocument.load(pdfBytes);
             assert.ok(document.getPageCount() >= 4);
         });
+
+        it('should sanitize non-WinAnsi characters to prevent pdf-lib errors', async function () {
+            const input = 'Hello\u2014world\u2018test\u201D\u2502\u251Cfoo\u2603';
+            const result = pdfGenerator.sanitizeText(input);
+            assert.strictEqual(result, 'Hello-world\'test"||--foo?');
+        });
     });
 });
